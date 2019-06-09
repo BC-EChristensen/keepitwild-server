@@ -21,6 +21,8 @@
  * @author DocuSign
  * @see <a href="https://developers.docusign.com">DocuSign Developer Center</a>
  */
+require('dotenv').config()
+
 const docusign = require('docusign-esign')
     , path = require('path')
     , fs = require('fs')
@@ -30,10 +32,12 @@ const docusign = require('docusign-esign')
     , envir = process.env
     ;
 
+const documentThing = JSON.parse(require('./KeepItWild.js').doc);
+
 // baseUrl is the url of the application's web server. Eg http://localhost:3000
 // In some cases, this example can determine the baseUrl automatically.
 // See the baseUrl statements at the end of this example.
-let baseUrl = envir.BASE_URL || '{BASE_URL}'
+let baseUrl = envir.BASE_URL || '{BASE_URL}';
 
 async function openSigningCeremonyController (req, res) {
   const qp =req.query;
@@ -41,15 +45,15 @@ async function openSigningCeremonyController (req, res) {
   // or environment variables.
 
   // Obtain an OAuth token from https://developers.hqtest.tst/oauth-token-generator
-  const accessToken = envir.ACCESS_TOKEN || qp.ACCESS_TOKEN || '{ACCESS_TOKEN}';
+  const accessToken = envir.ACCESS_TOKEN || qp.ACCESS_TOKEN;
 
   // Obtain your accountId from demo.docusign.com -- the account id is shown in the drop down on the
   // upper right corner of the screen by your picture or the default picture. 
-  const accountId = envir.ACCOUNT_ID || qp.ACCOUNT_ID || '{ACCOUNT_ID}'; 
+  const accountId = envir.ACCOUNT_ID || qp.ACCOUNT_ID;
 
   // Recipient Information:
-  const signerName = envir.USER_FULLNAME || qp.USER_FULLNAME || '{USER_FULLNAME}';
-  const signerEmail = envir.USER_EMAIL || qp.USER_EMAIL || '{USER_EMAIL}';
+  const signerName = envir.USER_FULLNAME || qp.USER_FULLNAME;
+  const signerEmail = envir.USER_EMAIL || qp.USER_EMAIL;
 
   const clientUserId = '123' // Used to indicate that the signer will use an embedded
                              // Signing Ceremony. Represents the signer's userId within
@@ -69,35 +73,27 @@ async function openSigningCeremonyController (req, res) {
    *          One signHere tab is added.
    *          The document path supplied is relative to the working directory
    */
-  const envDef = new docusign.EnvelopeDefinition();
+  const envDef = new docusign.EnvelopeDefinition(documentThing);
   //Set the Email Subject line and email message
   envDef.emailSubject = 'Please sign this document sent from the Node example';
   envDef.emailBlurb = 'Please sign this document sent from the Node example.'
 
-  // Read the file from the document and convert it to a Base64String
-  const pdfBytes = fs.readFileSync(path.resolve(__dirname, fileName))
-      , pdfBase64 = pdfBytes.toString('base64');
-
   // Create the document request object
-  const doc = docusign.Document.constructFromObject({documentBase64: pdfBase64,
-        fileExtension: 'pdf',  // You can send other types of documents too.
-        name: 'Sample document', documentId: '1'});
+  const doc = docusign.Document.constructFromObject(documentThing.documents[0]);
 
   // Create a documents object array for the envelope definition and add the doc object
   envDef.documents = [doc];
 
+  //console.log(documentThing.recipients.signers);
   // Create the signer object with the previously provided name / email address
-  const signer = docusign.Signer.constructFromObject({name: signerName, email: signerEmail,
-          routingOrder: '1', recipientId: '1', clientUserId: clientUserId});
+  const signer = docusign.Signer.constructFromObject({name: documentThing.recipients.signers[0].name, email: documentThing.recipients.signers[0].email,
+          routingOrder: documentThing.recipients.signers[0].routingOrder, recipientId: documentThing.recipients.signers[0].recipientId, clientUserId: clientUserId});
 
-  // Create the signHere tab to be placed on the envelope
-  const signHere = docusign.SignHere.constructFromObject({documentId: '1',
-          pageNumber: '1', recipientId: '1', tabLabel: 'SignHereTab',
-          xPosition: '195', yPosition: '147'});
 
+  //console.log(documentThing.recipients.signers[0].tabs.signHereTabs);
   // Create the overall tabs object for the signer and add the signHere tabs array
   // Note that tabs are relative to receipients/signers.
-  signer.tabs = docusign.Tabs.constructFromObject({signHereTabs: [signHere]});
+  signer.tabs = docusign.Tabs.constructFromObject(documentThing.recipients.signers[0].tabs);
 
   // Add the recipients object to the envelope definition.
   // It includes an array of the signer objects.
@@ -126,7 +122,7 @@ async function openSigningCeremonyController (req, res) {
     const envelopeId = results.envelopeId
         , recipientViewRequest = docusign.RecipientViewRequest.constructFromObject({
             authenticationMethod: authenticationMethod, clientUserId: clientUserId,
-            recipientId: '1', returnUrl: baseUrl + '/dsreturn',
+            recipientId: '98422687', returnUrl: envir.RETURN_URL + '?treasures=' + req.query.treasures,
             userName: signerName, email: signerEmail
           })
         ;
@@ -154,16 +150,10 @@ async function openSigningCeremonyController (req, res) {
 }
 
 // The mainline
-const port = process.env.PORT || 3000
+const port = process.env.PORT || 3001
     , host = process.env.HOST || 'localhost'
     , app = express()
-       .post('/', openSigningCeremonyController)
-       .get('/', (req, res) => {
-         res.send(`<html lang="en"><body><form action="${req.url}" method="post">
-          <input type="submit" value="Sign the document!"
-           style="width:13em;height:2em;background:#1f32bb;color:white;font:bold 1.5em arial;margin: 3em;"/>
-          </form></body>`)
-       })
+       .get('/', openSigningCeremonyController)
        .get('/dsreturn', (req, res) => {
         res.send(`<html lang="en"><body><p>The signing ceremony was completed with
           status ${req.query.event}</p><p>This page can also implement post-signing processing.</p></body>`)
